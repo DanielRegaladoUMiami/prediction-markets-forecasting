@@ -2,8 +2,12 @@
 
 ## Goal
 Forecast prediction markets (Kalshi, Polymarket, Robinhood — Robinhood lists Kalshi contracts) where public
-daily/weekly data *leads* the official resolution source. Start with commodities (AAA retail gas, energy,
-metals). One notebook per market.
+data *leads* or is sharper than the crowd. **One system**: every market is a spec in `specs.py`, rendered from
+the single `notebooks/template.ipynb` (built by `scripts/build_template.py`) via
+`python -m prediction_markets_forecasting.render <key>`. Never hand-write a per-market notebook.
+
+Market families: A weather (NWS station), B lagging statistic (AAA gas, mortgage, ERCOT), C macro release
+(CPI, jobs), D futures price (WTI, gold, FX — volatility, not level).
 
 Every notebook replicates the pipeline of Daniel's Logitech notebook
 (github.com/DanielRegaladoUMiami/product-sales-forecasting, `Individual_Project_DanielRegalado.ipynb`):
@@ -37,6 +41,11 @@ Agreed adaptations ("skeleton 100% + adjustments"):
   inside the weekly series) — always filter events by series prefix. Settled markets carry `expiration_value`
   (exact resolution value); some are non-numeric ("No").
 - AAA vs EIA weekly (FRED `GASREGW`): change corr 0.997, AAA ≈ EIA + 1.5¢ — valid proxy for long history.
+- Weather: Kalshi `KXHIGHMIA` settlement = NOAA GHCN TMAX at USW00012839 on 99.6% of 1,152 days. Day-before
+  model forecasts from Open-Meteo Previous Runs API (GFS from 2021, ECMWF/ICON/GEM from 2024); daily max taken
+  in `Etc/GMT+5` (NWS climate day = local *standard* time). Raw model maxima run several °F cold at MIA.
+- Kalshi ladders mix `greater` / `less` / `between` strikes (`floor_strike`, `cap_strike`); integer
+  underlyings need a continuity correction (`kalshi.bracket_bounds`).
 - The market is much sharper than public-data models on the daily AAA contract (σ ~0.7¢ vs ~1.6¢): traders see
   live station prices. Realistic edge is weekly/monthly early in the period, not daily.
 
@@ -46,7 +55,7 @@ Agreed adaptations ("skeleton 100% + adjustments"):
 - ruff (lint + format, pre-commit)
 
 ## Current milestone
-v0.1 — scaffold + notebook 01 (AAA US gas: daily KXAAAGASD, weekly KXAAAGASW, monthly KXAAAGASM)
+v0.1 — one system (specs + template); 01 AAA gas (D/W/M), 02 Miami daily high temperature
 
 ## Local rules
 - Conventional Commits (feat:, fix:, docs:, refactor:, chore:, test:)
@@ -73,8 +82,10 @@ uv run jupyter lab notebooks/
 ```
 
 ## Where things live
-- Shared code: `src/prediction_markets_forecasting/` (`stationarity.py` = automatic d/D/cointegration decisions)
-- Notebooks (one per market): `notebooks/NN_<market>.ipynb`
+- `src/prediction_markets_forecasting/`: `specs.py` (one spec per market), `markets.py` (data builders →
+  `MarketData`), `kalshi.py`, `sources.py` (FRED, Yahoo, NOAA, Open-Meteo), `selection.py` (driver discovery),
+  `stationarity.py`, `tournament.py`, `pricing.py` (Part 6), `render.py` (papermill)
+- Template: `scripts/build_template.py` → `notebooks/template.ipynb`; rendered: `notebooks/NN_<key>.ipynb`
 - Tests: `tests/`
 - Experiments log: `docs/experiments/`
 - Roadmap: `ROADMAP.md`

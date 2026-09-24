@@ -222,3 +222,4 @@ data/
 
 # venv lives outside iCloud sync (see CLAUDE.md)
 .venv.nosync/
+notebooks/_fast_*.ipynb

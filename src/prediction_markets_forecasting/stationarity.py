@@ -9,8 +9,9 @@ Rules follow Hyndman & Athanasopoulos, *Forecasting: Principles and Practice* (3
   the model gets an error-correction term (ECM) plus driver changes; otherwise only driver changes.
   Regressing one non-stationary level on another without cointegration gives spurious results.
 
-Every regressor row for period t only uses information known at t-1, so the features are safe for
-one-step-ahead cross-validation and live forecasts.
+Every regressor row for period t only uses information available when the forecast for t is made:
+observed drivers (e.g. wholesale prices) enter lagged one period; drivers known in advance ("ahead",
+e.g. a weather model's forecast for day t issued on t-1) enter at t.
 """
 
 from __future__ import annotations
@@ -94,6 +95,7 @@ class Design:
     driver_d: dict[str, int] = field(default_factory=dict)
     coint_p: dict[str, float] = field(default_factory=dict)
     coint_driver: str | None = None
+    ahead: list[str] = field(default_factory=list)
 
     @property
     def exog_mode(self) -> str:
@@ -118,8 +120,17 @@ class Design:
         return out
 
 
-def decide(y: pd.Series, X: pd.DataFrame | None, season: int, alpha: float = 0.05) -> Design:
-    """Run every test and return the decisions the models must follow."""
+def decide(
+    y: pd.Series,
+    X: pd.DataFrame | None,
+    season: int,
+    alpha: float = 0.05,
+    ahead: tuple[str, ...] | list[str] = (),
+) -> Design:
+    """Run every test and return the decisions the models must follow.
+
+    ``ahead`` names the drivers whose value for period t is already known before t (forecasts).
+    """
     y = y.dropna()
     adf_p = adf_pvalue(y)
     design = Design(
@@ -134,6 +145,7 @@ def decide(y: pd.Series, X: pd.DataFrame | None, season: int, alpha: float = 0.0
     if X is None or X.empty:
         return design
     design.drivers = list(X.columns)
+    design.ahead = [c for c in ahead if c in design.drivers]
     for c in X.columns:
         xc = X[c].dropna()
         design.driver_d[c] = ndiffs(xc, alpha)
@@ -152,44 +164,62 @@ def _coint_vector(y: pd.Series, x: pd.Series) -> tuple[float, float]:
     return float(intercept), float(slope)
 
 
-def exog_features(
-    y: pd.Series, X: pd.DataFrame, design: Design, coef: tuple[float, float] | None = None
+def _feature_frame(
+    y: pd.Series,
+    X: pd.DataFrame,
+    design: Design,
+    coef: tuple[float, float] | None,
+    next_date: pd.Timestamp | None = None,
 ) -> tuple[pd.DataFrame, tuple[float, float] | None]:
-    """Regressors for period t built only from information known at t-1.
+    idx = y.index if next_date is None else y.index.append(pd.DatetimeIndex([next_date]))
+    yy = y.reindex(idx)
+    Xy = X.reindex(idx)[design.drivers]
 
-    ``X`` holds each driver's value known at each period of ``y``. In "ecm" mode the long-run
-    vector is estimated on ``y`` itself (pass the training window only), and returned so the same
-    vector is reused for the next-step row.
-    """
-    Xy = X.loc[y.index, design.drivers]
-    feats = pd.DataFrame(index=y.index)
+    def usable(c: str) -> tuple[pd.Series, str]:
+        # value of driver c that may be used to forecast row t
+        return (Xy[c], "ahead") if c in design.ahead else (Xy[c].shift(1), "lag1")
+
+    feats = pd.DataFrame(index=idx)
     if design.exog_mode == "level":
         for c in design.drivers:
-            feats[f"{c}_lag1"] = Xy[c].shift(1)
+            v, tag = usable(c)
+            feats[f"{c}_{tag}"] = v
         return feats, None
     if design.exog_mode == "ecm":
         if coef is None:
-            coef = _coint_vector(y, Xy[design.coint_driver])
+            coef = _coint_vector(y, X.loc[y.index, design.coint_driver])
         a, b = coef
-        feats["ect_lag1"] = (y - a - b * Xy[design.coint_driver]).shift(1)
+        feats["ect_lag1"] = (yy - a - b * Xy[design.coint_driver]).shift(1)
     for c in design.drivers:
-        feats[f"d_{c}_lag1"] = Xy[c].diff().shift(1)
+        v, tag = usable(c)
+        feats[f"d_{c}_{tag}"] = v.diff()
     return feats, coef
 
 
+def exog_features(
+    y: pd.Series, X: pd.DataFrame, design: Design, coef: tuple[float, float] | None = None
+) -> tuple[pd.DataFrame, tuple[float, float] | None]:
+    """Regressors for every period of ``y`` (no look-ahead).
+
+    ``X`` holds each driver's value known at each period. In "ecm" mode the long-run vector is
+    estimated on ``y`` itself (pass the training window only) and returned so the same vector is
+    reused for the next-step row.
+    """
+    return _feature_frame(y, X, design, coef)
+
+
 def exog_next(
-    y: pd.Series, X: pd.DataFrame, design: Design, coef: tuple[float, float] | None
+    y: pd.Series,
+    X: pd.DataFrame,
+    design: Design,
+    coef: tuple[float, float] | None,
+    next_date: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    """Regressor row for the period right after ``y`` ends (values known at its last date)."""
-    last, prev = y.index[-1], y.index[-2]
-    row = {}
-    if design.exog_mode == "level":
-        for c in design.drivers:
-            row[f"{c}_lag1"] = X.loc[last, c]
-        return pd.DataFrame([row])
-    if design.exog_mode == "ecm":
-        a, b = coef
-        row["ect_lag1"] = y.loc[last] - a - b * X.loc[last, design.coint_driver]
-    for c in design.drivers:
-        row[f"d_{c}_lag1"] = X.loc[last, c] - X.loc[prev, c]
-    return pd.DataFrame([row])
+    """Regressor row for the period right after ``y`` ends.
+
+    Ahead drivers need their value at ``next_date`` in ``X``; observed drivers use the last date.
+    """
+    if next_date is None:
+        next_date = y.index[-1] + (y.index[-1] - y.index[-2])
+    feats, _ = _feature_frame(y, X, design, coef, next_date)
+    return feats.loc[[next_date]].reset_index(drop=True)

@@ -2,20 +2,21 @@
 
 ## Current milestone: v0.1
 - [x] Initial scaffold
-- [x] Data loading inside notebooks: Kalshi settlements (historical + live), FRED CSV, yfinance
-- [ ] Forward recorder for Kalshi market prices (Part 6 already snapshots each run to data/kalshi_snapshots/)
-- [x] Data quality: AAA vs EIA bridge (weekly change corr 0.997, bias +1.5¢); legacy/foreign tickers filtered
-- [x] Notebook 01 v1 — AAA US gas at three horizons: daily (KXAAAGASD), weekly (KXAAAGASW), monthly (KXAAAGASM); Logitech pipeline + exogenous + Part 6
+- [x] Kalshi market scan (00)
+- [x] AAA gas daily/weekly/monthly (01): AAA↔EIA bridge, drivers, tournament, Kalshi translation
+- [x] Automatic stationarity module (ADF+KPSS d, STL D, Engle-Granger → ECM), with tests
+- [x] One system: specs + market builders + tournament + pricing in `src/`, single template, papermill render
+- [x] Daily high temperature — Miami (02): NOAA↔Kalshi bridge (99.6% exact), day-before weather-model forecasts
+- [ ] Forward recorder for Kalshi prices (Part 6 snapshots each run to data/kalshi_snapshots/; needs a schedule)
 
 ## Next up
-- Notebook 01 v2: asymmetric error-correction model (retail margin vs lagged wholesale), RVP season dummy, forward selection by CV
-- EIA API (inventories, refinery utilization) — needs free EIA_API_KEY
-- Backtest model probabilities vs historical Kalshi prices (candlesticks)
-- Notebook 02 — futures-settled markets (WTI, gold, metals): forecast volatility (GARCH, OVX/GVZ), compare Kalshi ladder vs options-implied distribution
-- Notebook 02 — AAA Florida gas daily (KXAAAGASDFL) and other liquid states
-- Metals (gold, silver, copper monthly)
+- More temperature cities as specs (NYC, LA, Chicago, Atlanta, SF…) — verify each series' station first
+- Backtest model probabilities vs historical Kalshi prices (candlesticks) — the only proof of edge
+- Weather: same-day model runs (previous_day0 / HRRR) and live METAR for morning bets
+- Gas v2: asymmetric ECM (rockets & feathers), RVP season dummy, EIA inventories (free EIA_API_KEY)
+- AAA gas by state (KXAAAGASD<ST>) — history from EIA state series where available
+- Family C: CPI nowcast; Family D: volatility pricing (GARCH, OVX/GVZ) for WTI / gold
 - Polymarket equivalents
 
 ## Done
 - Repo created
-- Kalshi commodity market scan (see CLAUDE.md)

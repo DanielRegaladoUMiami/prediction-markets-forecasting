@@ -55,3 +55,23 @@ def test_exog_features_use_only_past_information():
     assert np.isclose(feats.loc[t, "d_x_lag1"], x[prev] - x[IDX[98]])
     nxt = exog_next(y, X, design, coef)
     assert np.isclose(nxt.loc[0, "ect_lag1"], y.iloc[-1] - a - b * x.iloc[-1])
+
+
+def test_ahead_driver_enters_without_lag():
+    # a forecast known before t: y_t = forecast_t + noise
+    f = pd.Series(80 + rng.normal(size=500).cumsum() * 0.1, index=IDX)
+    y = f + rng.normal(scale=0.3, size=500)
+    X = pd.DataFrame({"fcst": f})
+    design = decide(y, X, season=52, ahead=["fcst"])
+    feats, coef = exog_features(y, X, design)
+    t = IDX[100]
+    col = [c for c in feats.columns if c.endswith("_ahead")][0]
+    if design.exog_mode == "level":
+        assert np.isclose(feats.loc[t, col], f[t])
+    else:
+        assert np.isclose(feats.loc[t, col], f[t] - f[IDX[99]])
+    nxt_date = IDX[-1] + pd.Timedelta(weeks=1)
+    X_ext = pd.concat([X, pd.DataFrame({"fcst": [123.0]}, index=[nxt_date])])
+    row = exog_next(y, X_ext, design, coef, nxt_date)
+    expected = 123.0 if design.exog_mode == "level" else 123.0 - f.iloc[-1]
+    assert np.isclose(row.loc[0, col], expected)
