@@ -19,6 +19,12 @@ Agreed adaptations ("skeleton 100% + adjustments"):
 2. Exogenous drivers (e.g. RBOB, WTI) — the original notebook's own "Limitations" next step.
 3. More CV folds (long histories).
 4. Part 6: prediction intervals → P(bracket) → edge vs Kalshi price net of fees.
+5. **Stationarity is automatic, always** — every notebook calls `prediction_markets_forecasting.stationarity.decide()`
+   (Part 3.4) and every model follows its output; never hand-pick `d`/`D` or feed raw non-stationary exog levels:
+   - `d`: difference until ADF rejects a unit root AND KPSS does not reject stationarity (disagree → difference)
+   - `D`: one seasonal difference if STL seasonal strength > 0.64
+   - Exog: Engle-Granger cointegration → ECM term + driver changes; else driver changes; stationary target → lagged levels
+   - AIC only compares SARIMAX orders with the same `d`/`D`; ML predicts Δy when `d ≥ 1`
 
 ## Market findings (2026-09-23 scan of Kalshi public API)
 - Retail gas (AAA) has real edge potential: retail lags wholesale (RBOB) by ~1–2 weeks.
@@ -27,6 +33,12 @@ Agreed adaptations ("skeleton 100% + adjustments"):
   expect Naive to win; useful as a control, not as an edge.
 - Kalshi API v2 volume fields are strings: `volume_fp`, `volume_24h_fp`, `open_interest_fp`, `last_price_dollars`.
 - Kalshi retains limited price history → record market prices forward from day one.
+- `/historical/markets` returns legacy tickers (`AAAGASD-23OCT03-US`) and even foreign events (monthly `AAAGASM-*`
+  inside the weekly series) — always filter events by series prefix. Settled markets carry `expiration_value`
+  (exact resolution value); some are non-numeric ("No").
+- AAA vs EIA weekly (FRED `GASREGW`): change corr 0.997, AAA ≈ EIA + 1.5¢ — valid proxy for long history.
+- The market is much sharper than public-data models on the daily AAA contract (σ ~0.7¢ vs ~1.6¢): traders see
+  live station prices. Realistic edge is weekly/monthly early in the period, not daily.
 
 ## Stack
 - Python 3.11+
@@ -44,14 +56,24 @@ v0.1 — scaffold + notebook 01 (AAA US gas: daily KXAAAGASD, weekly KXAAAGASW, 
 - README/docs in English; conversation can be Spanish
 - API keys (FRED, EIA) live in `.env` / shell profile — never pasted in chat, never committed
 
+## Environment gotcha (iCloud)
+The repo lives under ~/Desktop (iCloud-synced). iCloud hides `.pth` files (breaks the editable install) and keeps
+re-materializing a cloud copy of `.venv` (a "dataless" ghost that blocks `rm`). The working venv is `.venv.nosync/`
+(iCloud skips `*.nosync`). Always point uv at it:
+```bash
+export UV_PROJECT_ENVIRONMENT=.venv.nosync   # or prefix each command
+```
+In Cursor, select `.venv.nosync/bin/python` as the interpreter. Ignore any `.venv` folder iCloud creates.
+
 ## How to run
 ```bash
+export UV_PROJECT_ENVIRONMENT=.venv.nosync
 uv sync
 uv run jupyter lab notebooks/
 ```
 
 ## Where things live
-- Source (shared data loaders, model tournament): `src/prediction_markets_forecasting/`
+- Shared code: `src/prediction_markets_forecasting/` (`stationarity.py` = automatic d/D/cointegration decisions)
 - Notebooks (one per market): `notebooks/NN_<market>.ipynb`
 - Tests: `tests/`
 - Experiments log: `docs/experiments/`

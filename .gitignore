@@ -219,3 +219,6 @@ __marimo__/
 # Local data cache (regenerable from APIs)
 data/
 !data/.gitkeep
+
+# venv lives outside iCloud sync (see CLAUDE.md)
+.venv.nosync/
