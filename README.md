@@ -18,7 +18,8 @@ probabilities and compares them with the market price net of fees.
 
 | # | Market | Kalshi series | Status |
 |---|--------|---------------|--------|
-| 01 | AAA US regular gas — daily / weekly / monthly | `KXAAAGASD` / `KXAAAGASW` / `KXAAAGASM` | planned |
+| 00 | Kalshi commodity market scan | all | done |
+| 01 | AAA US regular gas — daily / weekly / monthly | `KXAAAGASD` / `KXAAAGASW` / `KXAAAGASM` | v1 — beats random walk; not yet sharper than the market |
 
 ## How to run
 
