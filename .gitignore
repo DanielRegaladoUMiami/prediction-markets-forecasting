@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Local data cache (regenerable from APIs)
+data/
+!data/.gitkeep
